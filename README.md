@@ -1,19 +1,22 @@
 # ozn-cc-statusline
 
-A minimal Claude Code status line showing quota usage, rate limit countdowns, and context window size.
+A minimal Claude Code status line showing quota usage, rate limit countdowns, working directory, and context window size.
 
 ```
-› 5h  ▁▁▁  3%  ↺ 4h32m  ┊  › 7d  ████▄▄  72%  ↺ 3d14h  ┊  › claude-sonnet-4-6(12.3k/200.0k)
+› …/ozn/prjs/ozn-cc-statusline  ┊  › 5h  ▁▁▁  3%  ↺ 4h32m  ┊  › 7d  ████▄▄  72%  ↺ 3d14h  ┊  › claude-sonnet-4-6 high (12k/200k · 6%)
 ```
 
 ## What it shows
 
+Segments appear left to right in this order:
+
 | Segment | Meaning |
 |---------|---------|
+| `[CAVEMAN]` | Badge prefix shown when [caveman](https://github.com/JuliusBrussee/caveman) plugin is active |
+| `› dir` | Working directory: last 3 path segments (capped at 40 chars) |
 | `› 5h` | 5-hour rolling quota: sparkline + % used + time to reset |
 | `› 7d` | 7-day rolling quota: sparkline + % used + time to reset |
-| `› model-id(used/max)` | Current model + context window usage |
-| `[CAVEMAN]` | Badge shown when [caveman](https://github.com/JuliusBrussee/caveman) plugin is active |
+| `› model-id effort (used/max · %)` | Current model + reasoning effort + context window usage and % |
 
 ## Requirements
 
@@ -45,6 +48,20 @@ cd ozn-cc-statusline
 ```
 
 Restart Claude Code after install.
+
+## Update
+
+Re-run the installer — it overwrites the installed script and re-merges the `statusLine` key (idempotent):
+
+```bash
+# If cloned:
+git pull && ./install.sh
+
+# Or one-liner:
+curl -fsSL https://raw.githubusercontent.com/simoneanam/ozn-cc-statusline/main/install.sh | bash
+```
+
+Restart Claude Code to pick up the new version.
 
 ## Uninstall
 

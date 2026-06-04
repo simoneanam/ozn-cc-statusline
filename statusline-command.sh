@@ -2,6 +2,8 @@
 # Claude Code status bar — hairline-mono aesthetic
 # Shows: › 5h quota  ┊  › 7d quota  ┊  › model(used/max)
 
+export LC_ALL=C
+
 input=$(cat)
 
 # ── color codes (ANSI 256) ────────────────────────────────────────────────────
@@ -10,6 +12,8 @@ SPARK=$'\033[38;5;253m'    # rgb(220,220,220) — sparkline chars
 PCT=$'\033[38;5;254m'      # rgb(228,228,228) — percentage number
 SEP_C=$'\033[38;5;238m'    # rgb(70,70,70)   — separator ┊
 MODEL_C=$'\033[38;5;254m'  # rgb(228,228,228) — model name + token info
+DIR_C=$'\033[38;5;109m'    # rgb(135,175,175) — working directory
+EFFORT_C=$'\033[38;5;247m' # rgb(140,140,140) — effort level
 RST=$'\033[0m'
 
 # ── sparkline ─────────────────────────────────────────────────────────────────
@@ -73,6 +77,8 @@ epoch_to_remaining() {
 
 # ── extract fields ────────────────────────────────────────────────────────────
 
+cwd=$(echo "$input"         | jq -r '.cwd // empty')
+effort=$(echo "$input"      | jq -r '.effort.level // empty')
 model_id=$(echo "$input"    | jq -r '.model.id // empty')
 ctx_size=$(echo "$input"    | jq -r '.context_window.context_window_size // empty')
 ctx_pct=$(echo "$input"     | jq -r '.context_window.used_percentage // empty')
@@ -84,12 +90,34 @@ week_reset=$(echo "$input"  | jq -r '.rate_limits.seven_day.resets_at // empty')
 
 # ── format token counts as e.g. "45.0k" ─────────────────────────────────────
 fmt_k() {
-  awk -v n="$1" 'BEGIN { printf "%.1fk", n / 1000 }'
+  awk -v n="$1" 'BEGIN { printf (n < 1000 ? "%.1fk" : "%.0fk"), n / 1000 }'
 }
 
 # ── build sections ────────────────────────────────────────────────────────────
 
 SEP="$(printf ' %s┊%s ' "$SEP_C" "$RST")"
+
+# cwd section: › <basename>
+if [ -n "$cwd" ]; then
+  cwd_disp=$(awk -v p="$cwd" 'BEGIN {
+    n = split(p, a, "/")
+    # drop empty leading element from absolute paths
+    start = (a[1] == "" ? 2 : 1)
+    cnt = n - start + 1
+    keep = 3
+    out = ""
+    from = (cnt > keep ? n - keep + 1 : start)
+    for (i = from; i <= n; i++) out = (out == "" ? a[i] : out "/" a[i])
+    if (cnt > keep) out = "…/" out
+    # hard length cap
+    max = 40
+    if (length(out) > max) out = "…" substr(out, length(out) - max + 2)
+    printf "%s", out
+  }')
+  cwd_sec="$(printf '%s›%s %s%s%s' "$DIM" "$RST" "$DIR_C" "$cwd_disp" "$RST")"
+else
+  cwd_sec="$(printf '%s› dir%s' "$DIM" "$RST")"
+fi
 
 # 5h section
 if [ -n "$five_pct" ]; then
@@ -131,11 +159,18 @@ if [ -n "$model_id" ]; then
   if [ -n "$ctx_pct" ] && [ -n "$ctx_size" ]; then
     used_tokens=$(awk -v pct="$ctx_pct" -v size="$ctx_size" \
       'BEGIN { printf "%.0f", pct * size / 100 }')
-    token_info="($(fmt_k "$used_tokens")/$(fmt_k "$ctx_size"))"
+    ctx_pct_int=$(printf '%.0f' "$ctx_pct")
+    token_info=" ($(fmt_k "$used_tokens")/$(fmt_k "$ctx_size") · ${ctx_pct_int}%)"
   fi
-  model_sec="$(printf '%s›%s %s%s%s%s' \
+  effort_info=""
+  if [ -n "$effort" ]; then
+    effort_info="$(printf ' %s%s%s' "$EFFORT_C" "$effort" "$RST")"
+  fi
+  model_sec="$(printf '%s›%s %s%s%s%s%s' \
     "$DIM" "$RST" \
-    "$MODEL_C" "$model_id" "$token_info" "$RST")"
+    "$MODEL_C" "$model_id" "$RST" \
+    "$effort_info" \
+    "$(printf '%s%s%s' "$MODEL_C" "$token_info" "$RST")")"
 else
   model_sec="$(printf '%s› model%s' "$DIM" "$RST")"
 fi
@@ -157,8 +192,9 @@ fi
 
 # ── assemble line ─────────────────────────────────────────────────────────────
 
-printf '%s%s%s%s%s%s' \
+printf '%s%s%s%s%s%s%s%s' \
   "$caveman_sec" \
+  "$cwd_sec" "$SEP" \
   "$five_sec" "$SEP" \
   "$week_sec" "$SEP" \
   "$model_sec"
